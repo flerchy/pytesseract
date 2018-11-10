@@ -24,11 +24,6 @@ numpy_installed = find_loader('numpy') is not None
 if numpy_installed:
     from numpy import ndarray
 
-from io import BytesIO
-pandas_installed = find_loader('pandas') is not None
-if pandas_installed:
-    import pandas as pd
-
 # CHANGE THIS IF TESSERACT IS NOT IN YOUR PATH, OR IS NAMED DIFFERENTLY
 tesseract_cmd = 'tesseract'
 RGB_MODE = 'RGB'
@@ -46,12 +41,6 @@ class Output:
     STRING = "string"
     BYTES = "bytes"
     DICT = "dict"
-    DATAFRAME = "data.frame"
-
-
-class PandasNotSupported(EnvironmentError):
-    def __init__(self):
-        super(PandasNotSupported, self).__init__('Missing pandas package')
 
 
 class TesseractError(RuntimeError):
@@ -174,14 +163,15 @@ def run_tesseract(input_filename,
     if lang is not None:
         cmd_args += ('-l', lang)
 
+    cmd_args += ('--oem', str(oem))
+
+    cmd_args += ('--psm', str(psm))
+
     cmd_args += shlex.split(config)
 
     if extension not in ('box', 'osd', 'tsv'):
         cmd_args.append(extension)
-
-    cmd_args += ('--oem', str(oem))
-
-    cmd_args += ('--psm', str(psm))
+    print(cmd_args)
     try:
         proc = subprocess.Popen(cmd_args, **subprocess_args())
     except OSError:
@@ -200,7 +190,8 @@ def run_and_get_output(image,
                        extension,
                        lang=None,
                        config='',
-                       nice=0,
+                       oem=1,
+                       psm=6,
                        return_bytes=False):
 
     temp_name, input_filename = '', ''
@@ -212,8 +203,10 @@ def run_and_get_output(image,
             'extension': extension,
             'lang': lang,
             'config': config,
-            'nice': nice
+            'oem': oem,
+            'psm': psm
         }
+        print(kwargs)
 
         run_tesseract(**kwargs)
         filename = kwargs['output_filename_base'] + os.extsep + extension
@@ -293,14 +286,14 @@ def get_tesseract_version():
 
 
 def image_to_string(image,
-                    lang=None,
+                    lang='rus',
                     config='',
-                    nice=0,
-                    output_type=Output.STRING):
+                    output_type=Output.STRING,
+                    oem=1):
     '''
     Returns the result of a Tesseract OCR run on the provided image to string
     '''
-    args = [image, 'txt', lang, config, nice]
+    args = [image, 'txt', lang, config, oem]
 
     if output_type == Output.DICT:
         return {'text': run_and_get_output(*args)}
@@ -364,12 +357,6 @@ def image_to_data(image,
 
     if output_type == Output.DICT:
         return file_to_dict(run_and_get_output(*args), '\t', -1)
-    elif output_type == Output.DATAFRAME:
-        if not pandas_installed:
-            raise PandasNotSupported()
-
-        args.append(True)
-        return pd.read_csv(BytesIO(run_and_get_output(*args)), sep="\t")
     elif output_type == Output.BYTES:
         args.append(True)
 
